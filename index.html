@@ -1,0 +1,137 @@
+<html>
+<head>
+    <style>
+    </style>
+    <link rel="stylesheet" href="skeleton.css">
+    <link href="https://fonts.googleapis.com/css?family=Noto+Sans:700|Roboto" rel="stylesheet">
+    <script src="d3.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>How has life expectancy changed?</h1>
+        <div class="chart"></div>
+        <footer class="u-pull-right"><a href="https://data.world/makeovermonday/life-expectancy-at-birth-by-country">Life Expectancy at Birth</a></footer>
+    </div>
+</body>
+<script>
+
+    ////////////////////////////////////////////////////////////////////////////////
+    /////////////////////////// CREATE A LINE CHART CLASS //////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////
+    class lineChart {
+        constructor(opts) {
+            this.element = opts.element;
+            this.width = opts.width;
+            this.height = opts.height;
+            this.margin = opts.margin;
+            this.padding = opts.padding;
+            this.OGdata = opts.originalData;
+            this.data = opts.transformedData;
+
+            // Create additional setup variables we'll need locally based on the options above
+            this.plotWidth = this.width - (this.margin.left + this.margin.right);
+            this.plotHeight = this.height - (this.margin.top + this.margin.bottom);
+            this.chartWidth = this.plotWidth - (this.padding.right + this.padding.left);
+            this.chartHeight = this.plotHeight - (this.padding.top + this.padding.bottom);
+
+            this.setupChartArea();
+            this.createScales();
+            this.createLine();
+        }
+
+        setupChartArea() {
+            const svg = d3.select(this.element).append('svg')
+                .attr('width', this.width)
+                .attr('height', this.height)
+
+            this.plot = svg.append('g')
+                .attr('translate', `transform(${this.margin.left}, ${this.margin.top})`)
+        }
+
+        createScales() {
+
+            const xScale = d3.scaleLinear()
+                .domain(d3.extent(this.OGdata, d => d.year))
+                .range([this.padding.left, this.width - this.padding.right])
+
+            const yScale = d3.scaleLinear()
+                .domain(d3.extent(this.OGdata, d => d['life-expectancy']))
+                .range([this.height - this.padding.bottom, this.padding.top])
+
+            ////////////////////////////////////////////////////////////////////////////////
+            ///////////////////////////// CREATE LINE GENERATOR ////////////////////////////
+            ////////////////////////////////////////////////////////////////////////////////
+            this.lineGenerator = d3.line()
+                .x( function(d) { return xScale(d.year) })
+                .y( function(d) { return yScale(d.life) });
+
+        }
+
+        createLine() {
+
+            this.line = this.plot.selectAll('path').data(this.data, d => d.country);
+
+            this.lineEnter = this.line.enter()
+                .append('path')
+                    .attr('fill','none')
+                    .attr('stroke', 'steelblue')
+                    .attr('stroke-width', 1.5)
+                    .attr('d', d => this.lineGenerator(d.years));
+        }
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    ////////////////////////// LOAD DATA FOR THE 1ST TIME //////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////
+    d3.csv('life-expectancy.csv').then( data => {
+        function initializeData(data) {
+
+            const nested = d3.nest()
+                .key(d => d.country)
+                .entries(data);
+
+            const transformedData = [];
+
+            for(const country of Array.from(nested)) {
+                const obj = {
+                        country: '',
+                        years: []
+                    }
+
+                obj.country = country.key;
+                
+                for(const year of country.values) {
+                    obj.years.push({
+                        year: +year.year,
+                        life: +year['life-expectancy']
+                    })
+                    transformedData.push(obj);  
+                }
+            }
+
+            return transformedData;
+        }
+
+        ////////////////////////////////////////////////////////////////////////////////
+        ////////////////////////////// SET THE CHART SIZE //////////////////////////////
+        ////////////////////////////////////////////////////////////////////////////////
+        const width = 960;
+        const height = 500;
+        const margin = {top: 10, right: 10, bottom: 10, left: 10};
+        const padding = {top: 10, right: 10, bottom: 10, left: 10};
+
+        ////////////////////////////////////////////////////////////////////////////////
+        /////////////////////////////// CREATE NEW CHART ///////////////////////////////
+        ////////////////////////////////////////////////////////////////////////////////
+        const chart = new lineChart({
+            element: document.querySelector('.chart'),
+            width,
+            height,
+            margin,
+            padding,
+            originalData: data,
+            transformedData: initializeData(data)
+        });
+    });
+</script>
+</html>
