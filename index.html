@@ -5,6 +5,7 @@
     <link rel="stylesheet" href="skeleton.css">
     <link href="https://fonts.googleapis.com/css?family=Noto+Sans:700|Roboto" rel="stylesheet">
     <script src="d3.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.11/lodash.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -51,11 +52,11 @@
         createScales() {
 
             const xScale = d3.scaleLinear()
-                .domain(d3.extent(this.OGdata, d => d.year))
+                .domain(d3.extent(this.OGdata, d => +d.year))
                 .range([this.padding.left, this.width - this.padding.right])
 
             const yScale = d3.scaleLinear()
-                .domain(d3.extent(this.OGdata, d => d['life-expectancy']))
+                .domain([d3.min(this.data, d => d.minLE), d3.max(this.data, d => d.maxLE)])
                 .range([this.height - this.padding.bottom, this.padding.top])
 
             ////////////////////////////////////////////////////////////////////////////////
@@ -85,6 +86,7 @@
     ////////////////////////////////////////////////////////////////////////////////
     d3.csv('life-expectancy.csv').then( data => {
         function initializeData(data) {
+            const compYear = '1981'
 
             const nested = d3.nest()
                 .key(d => d.country)
@@ -92,21 +94,32 @@
 
             const transformedData = [];
 
+            // let compCountry = Array.from(data.filter(d => d.country == country.key));
+            // let compLifeE = +Array.from(compCountry.filter(d => '1963' == d.year)['life-expectancy']);
+
             for(const country of Array.from(nested)) {
+
                 const obj = {
-                        country: '',
+                        baseline: +Array.from(data.filter(d => d.country == country.key)).filter(d => d.year == '1981')[0]['life-expectancy'],
                         years: []
                     }
-
+                
                 obj.country = country.key;
                 
                 for(const year of country.values) {
+
                     obj.years.push({
                         year: +year.year,
-                        life: +year['life-expectancy']
+                        life: +year['life-expectancy'] - obj.baseline
                     })
-                    transformedData.push(obj);  
                 }
+
+                transformedData.push(obj);
+
+                for(const object of transformedData) {
+                    [object.minLE, object.maxLE] = d3.extent(object.years, d => d.life);
+                }
+
             }
 
             return transformedData;
