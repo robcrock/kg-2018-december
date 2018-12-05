@@ -1,6 +1,13 @@
 <html>
 <head>
     <style>
+        .y-axis>path {
+            stroke: rgb(193, 193, 193);
+            fill: none;
+        }
+        .tick>line {
+            display: none;
+        }
     </style>
     <link rel="stylesheet" href="skeleton.css">
     <link href="https://fonts.googleapis.com/css?family=Noto+Sans:700|Roboto" rel="stylesheet">
@@ -38,6 +45,7 @@
             this.setupChartArea();
             this.createScales();
             this.createLine();
+            this.createAxes();
         }
 
         setupChartArea() {
@@ -46,16 +54,19 @@
                 .attr('height', this.height)
 
             this.plot = svg.append('g')
-                .attr('translate', `transform(${this.margin.left}, ${this.margin.top})`)
+                .classed('plot', true)
+                .attr('transform', `translate(${this.margin.left}, ${this.margin.top})`)
+                .attr('width', this.width - (this.margin.left + this.margin.right))
+                .attr('height', this.height - (this.margin.top + this.margin.bottom))
         }
 
         createScales() {
 
-            const xScale = d3.scaleLinear()
+            this.xScale = d3.scaleLinear()
                 .domain(d3.extent(this.OGdata, d => +d.year))
                 .range([this.padding.left, this.width - this.padding.right])
 
-            const yScale = d3.scaleLinear()
+            this.yScale = d3.scaleLinear()
                 .domain([d3.min(this.data, d => d.minLE), d3.max(this.data, d => d.maxLE)])
                 .range([this.height - this.padding.bottom, this.padding.top])
 
@@ -63,18 +74,37 @@
             ///////////////////////////// CREATE LINE GENERATOR ////////////////////////////
             ////////////////////////////////////////////////////////////////////////////////
             this.lineGenerator = d3.line()
-                .x( function(d) { return xScale(d.year) })
-                .y( function(d) { return yScale(d.life) });
+                .x( d => this.xScale(d.year) )
+                .y( d => this.yScale(d.life) )
+	            .curve(d3.curveCardinal);
 
+        }
+
+        createAxes() {
+            this.yAxis = d3.axisRight()
+                .scale(this.yScale)
+
+            const refLine = this.plot.append('g')
+                .classed('y-axis', true)
+                .attr('transform', `translate(${this.xScale(1981)}, ${this.padding.top})`)
+                .call(this.yAxis);
+
+            this.yTick = refLine.selectAll('text')
+                .attr('text-anchor', 'middle')
+                .attr('x', 0)
+                .attr('font-size', 12)
+            
+            console.log(this.yTick);
         }
 
         createLine() {
 
-            this.line = this.plot.selectAll('path').data(this.data, d => d.country);
+            this.line = d3.select('.plot')
+                .selectAll('path').data(this.data, d => d.country);
 
             this.lineEnter = this.line.enter()
                 .append('path')
-                    .attr('fill','none')
+                    .attr('fill', 'none')
                     .attr('stroke', 'steelblue')
                     .attr('stroke-width', 1.5)
                     .attr('d', d => this.lineGenerator(d.years));
