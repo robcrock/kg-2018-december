@@ -69,15 +69,14 @@
     ////////////////////////////////////////////////////////////////////////////////
     /////////////////////////// CREATE A LINE CHART CLASS //////////////////////////
     ////////////////////////////////////////////////////////////////////////////////
-    class lineChart {
+    class LineChart {
         constructor(opts) {
             this.element = opts.element;
             this.width = opts.width;
             this.height = opts.height;
             this.margin = opts.margin;
             this.padding = opts.padding;
-            this.OGdata = opts.originalData;
-            this.data = opts.transformedData;
+            this.data = opts.data;
 
             // Create additional setup variables we'll need locally based on the options above
             this.plotWidth = this.width - (this.margin.left + this.margin.right);
@@ -85,11 +84,55 @@
             this.chartWidth = this.plotWidth - (this.padding.right + this.padding.left);
             this.chartHeight = this.plotHeight - (this.padding.top + this.padding.bottom);
 
+            this.updateData(this.data);
             this.setupChartArea();
             this.createScales();
             this.createSlider();
             this.createLine();
             this.createAxes();
+        }
+
+        updateData(data) {
+
+            console.log('Original data ', data)
+
+            const nested = d3.nest()
+                .key(d => d.country)
+                .entries(data);
+
+            // console.log('Nested data ', nested)
+
+            this.transformedData = [];
+
+            for(const country of Array.from(nested)) {
+
+                const obj = {
+                        baseline: +Array.from(data.filter(d => d.country == country.key)).filter(d => d.year == '1961')[0]['life-expectancy'],
+                        years: []
+                    }
+                
+                obj.country = country.key;
+                
+                for(const year of country.values) {
+
+                    obj.years.push({
+                        year: +year.year,
+                        life: +year['life-expectancy'] - obj.baseline
+                    })
+                }
+
+                this.transformedData.push(obj);
+
+                // Use this to calculate scale the smart way
+                // for(const object of this.transformedData) {
+                //     [object.minLE, object.maxLE] = d3.extent(object.years, d => d.life);
+                // }
+
+            }
+
+            // console.log('Transformed data ', this.transformedData);
+
+            return this.transformedData;
         }
 
         setupChartArea() {
@@ -107,11 +150,11 @@
         createScales() {
 
             this.xScale = d3.scaleLinear()
-                .domain(d3.extent(this.OGdata, d => +d.year))
+                .domain(d3.extent(this.data, d => +d.year))
                 .range([this.padding.left, this.width - this.padding.right])
 
             this.yScale = d3.scaleLinear()
-                .domain([d3.min(this.data, d => d.minLE), d3.max(this.data, d => d.maxLE)])
+                .domain([-50, 50]) //[d3.min(this.transformedData, d => d.minLE), d3.max(this.transformedData, d => d.maxLE)])
                 .range([this.height - this.padding.bottom, this.padding.top])
 
             ////////////////////////////////////////////////////////////////////////////////
@@ -153,9 +196,9 @@
                 .append("svg")
                 .attr("width", width + margin.left + margin.right)
                 .attr("height", height);
-                
-            const x = d3.scaleLinear()
-                .domain([startDate, endDate])
+
+            this.x = d3.scaleLinear()
+                .domain([this.xScale.domain()[0], this.xScale.domain()[1]])
                 .range([0, width])
                 .clamp(true);
 
@@ -165,59 +208,91 @@
 
             slider.append("line")
                 .attr("class", "track")
-                .attr("x1", x.range()[0])
-                .attr("x2", x.range()[1])
+                .attr("x1", this.x.range()[0])
+                .attr("x2", this.x.range()[1])
             .select(function() { return this.parentNode.appendChild(this.cloneNode(true)); })
                 .attr("class", "track-inset")
             .select(function() { return this.parentNode.appendChild(this.cloneNode(true)); })
                 .attr("class", "track-overlay")
                 .call(d3.drag()
                     .on("start.interrupt", function() { slider.interrupt(); })
-                    .on("start drag", function() { update(x.invert(d3.event.x)) })); //this.update(x.invert(d3.event.x)); })); // this.update(x.invert(d3.event.x));
+                    .on("start drag", () =>  { this.update(this.x.invert(d3.event.x)) }));
 
             slider.insert("g", ".track-overlay")
                 .attr("class", "ticks")
                 .attr("transform", "translate(0," + 18 + ")")
             .selectAll("text")
-                .data(x.ticks(10))
+                .data(this.x.ticks(10))
                 .enter()
                 .append("text")
-                .attr("x", x)
+                .attr("x", this.x)
                 .attr("y", 10)
                 .attr("text-anchor", "middle")
                 .text(function(d) { return d; });
 
-            const handle = slider.insert("circle", ".track-overlay")
+            this.handle = slider.insert("circle", ".track-overlay")
                 .attr("class", "handle")
                 .attr("r", 9);
 
-            const label = slider.append("text")  
+            this.label = slider.append("text")  
                 .attr("class", "label")
                 .attr("text-anchor", "middle")
                 .text(startDate)
                 .attr("transform", "translate(0," + (-25) + ")")
-
-            function update(h) {
-                // update position and text of label according to slider scale
-                handle.attr("cx", x(h));
-
-                label
-                    .attr("x", x(h))
-                    .text(Math.round(h));
-
-                this.refLine
-                    .attr('transform', `translate(${x(h)}, ${this.padding.top})`)
-
-                
-
-            }  
  
         }
+
+        update(h) {
+            // update position and text of label according to slider scale
+            this.handle.attr("cx", this.x(h));
+
+            this.label
+                .attr("x", this.x(h))
+                .text(Math.round(h));
+
+            this.refLine
+                .attr('transform', `translate(${this.x(h)}, ${this.padding.top})`)
+
+            this.compYear = [];
+            
+            for(const obj of this.data) {
+                if(obj.year == Math.round(h)) {
+                    compYear.push({
+                        country: obj.country,
+                        compYear: +obj.year,
+                        baseline: +obj['life-expectancy']
+                    })
+                } else {
+                    continue;
+                }  
+            }
+
+            const newTrans = [];
+
+            for(const country of this.transformedData) {
+
+                console.log(this.compYear.country);
+
+                // for(const year of country.values) {
+
+                //     obj.years.push({
+                //         year: +year.year,
+                //         life: +year['life-expectancy'] - obj.baseline
+                //     })
+                // }
+
+                // this.transformedData.push(obj);
+
+            }
+
+            // console.log(this.transformedData);
+
+        }  
 
         createLine() {
 
             this.line = d3.select('.plot')
-                .selectAll('path').data(this.data, d => d.country);
+                .selectAll('path').data(this.transformedData, d => d.key);
 
             this.lineEnter = this.line.enter()
                 .append('path')
@@ -232,45 +307,6 @@
     ////////////////////////// LOAD DATA FOR THE 1ST TIME //////////////////////////
     ////////////////////////////////////////////////////////////////////////////////
     d3.csv('life-expectancy.csv').then( data => {
-        function initializeData(data) {
-            const compYear = '1961'
-
-            const nested = d3.nest()
-                .key(d => d.country)
-                .entries(data);
-
-            const transformedData = [];
-
-            // let compCountry = Array.from(data.filter(d => d.country == country.key));
-            // let compLifeE = +Array.from(compCountry.filter(d => '1963' == d.year)['life-expectancy']);
-
-            for(const country of Array.from(nested)) {
-
-                const obj = {
-                        baseline: +Array.from(data.filter(d => d.country == country.key)).filter(d => d.year == '1961')[0]['life-expectancy'],
-                        years: []
-                    }
-                
-                obj.country = country.key;
-                
-                for(const year of country.values) {
-
-                    obj.years.push({
-                        year: +year.year,
-                        life: +year['life-expectancy'] - obj.baseline
-                    })
-                }
-
-                transformedData.push(obj);
-
-                for(const object of transformedData) {
-                    [object.minLE, object.maxLE] = d3.extent(object.years, d => d.life);
-                }
-
-            }
-
-            return transformedData;
-        }
 
         ////////////////////////////////////////////////////////////////////////////////
         ////////////////////////////// SET THE CHART SIZE //////////////////////////////
@@ -283,14 +319,13 @@
         ////////////////////////////////////////////////////////////////////////////////
         /////////////////////////////// CREATE NEW CHART ///////////////////////////////
         ////////////////////////////////////////////////////////////////////////////////
-        const chart = new lineChart({
+        const chart = new LineChart({
             element: document.querySelector('.chart'),
             width,
             height,
             margin,
             padding,
-            originalData: data,
-            transformedData: initializeData(data)
+            data: data
         });
 
     });
