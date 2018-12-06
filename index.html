@@ -5,8 +5,50 @@
             stroke: rgb(193, 193, 193);
             fill: none;
         }
+
         .tick>line {
             display: none;
+        }
+
+        body {
+            font-family:"avenir next", Arial, sans-serif;
+            font-size: 12px;
+            color: #696969;
+        }
+
+        .ticks {
+            font-size: 10px;
+        }
+
+        .track,
+        .track-inset,
+        .track-overlay {
+            stroke-linecap: round;
+        }
+
+        .track {
+            stroke: #000;
+            stroke-opacity: 0.3;
+            stroke-width: 10px;
+        }
+
+        .track-inset {
+            stroke: #dcdcdc;
+            stroke-width: 8px;
+        }
+
+        .track-overlay {
+            pointer-events: stroke;
+            stroke-width: 50px;
+            stroke: transparent;
+            cursor: crosshair;
+        }
+
+        .handle {
+            fill: #fff;
+            stroke: #000;
+            stroke-opacity: 0.5;
+            stroke-width: 1.25px;
         }
     </style>
     <link rel="stylesheet" href="skeleton.css">
@@ -17,6 +59,7 @@
 <body>
     <div class="container">
         <h1>How has life expectancy changed?</h1>
+        <div class="slider"></div>
         <div class="chart"></div>
         <footer class="u-pull-right"><a href="https://data.world/makeovermonday/life-expectancy-at-birth-by-country">Life Expectancy at Birth</a></footer>
     </div>
@@ -44,6 +87,7 @@
 
             this.setupChartArea();
             this.createScales();
+            this.createSlider();
             this.createLine();
             this.createAxes();
         }
@@ -84,17 +128,90 @@
             this.yAxis = d3.axisRight()
                 .scale(this.yScale)
 
-            const refLine = this.plot.append('g')
+            this.refLine = this.plot.append('g')
                 .classed('y-axis', true)
-                .attr('transform', `translate(${this.xScale(1981)}, ${this.padding.top})`)
+                .attr('transform', `translate(${this.xScale(1961)}, ${this.padding.top})`)
                 .call(this.yAxis);
 
-            this.yTick = refLine.selectAll('text')
+            this.yTick = this.refLine.selectAll('text')
                 .attr('text-anchor', 'middle')
                 .attr('x', 0)
                 .attr('font-size', 12)
-            
-            console.log(this.yTick);
+        }
+
+        createSlider() {
+            const startDate = 1961;
+            const endDate = 2015;
+
+            const margin = {top:0, right:50, bottom:0, left:50},
+                width = 960 - margin.left - margin.right,
+                height = 200 - margin.top - margin.bottom;
+
+            ////////// slider //////////
+
+            const svgSlider = d3.select(".slider")
+                .append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height);
+                
+            const x = d3.scaleLinear()
+                .domain([startDate, endDate])
+                .range([0, width])
+                .clamp(true);
+
+            const slider = svgSlider.append("g")
+                .attr("class", "slider")
+                .attr("transform", "translate(" + margin.left + "," + height / 2 + ")");
+
+            slider.append("line")
+                .attr("class", "track")
+                .attr("x1", x.range()[0])
+                .attr("x2", x.range()[1])
+            .select(function() { return this.parentNode.appendChild(this.cloneNode(true)); })
+                .attr("class", "track-inset")
+            .select(function() { return this.parentNode.appendChild(this.cloneNode(true)); })
+                .attr("class", "track-overlay")
+                .call(d3.drag()
+                    .on("start.interrupt", function() { slider.interrupt(); })
+                    .on("start drag", function() { update(x.invert(d3.event.x)) })); //this.update(x.invert(d3.event.x)); })); // this.update(x.invert(d3.event.x));
+
+            slider.insert("g", ".track-overlay")
+                .attr("class", "ticks")
+                .attr("transform", "translate(0," + 18 + ")")
+            .selectAll("text")
+                .data(x.ticks(10))
+                .enter()
+                .append("text")
+                .attr("x", x)
+                .attr("y", 10)
+                .attr("text-anchor", "middle")
+                .text(function(d) { return d; });
+
+            const handle = slider.insert("circle", ".track-overlay")
+                .attr("class", "handle")
+                .attr("r", 9);
+
+            const label = slider.append("text")  
+                .attr("class", "label")
+                .attr("text-anchor", "middle")
+                .text(startDate)
+                .attr("transform", "translate(0," + (-25) + ")")
+
+            function update(h) {
+                // update position and text of label according to slider scale
+                handle.attr("cx", x(h));
+
+                label
+                    .attr("x", x(h))
+                    .text(Math.round(h));
+
+                this.refLine
+                    .attr('transform', `translate(${x(h)}, ${this.padding.top})`)
+
+                
+
+            }  
+ 
         }
 
         createLine() {
@@ -116,7 +233,7 @@
     ////////////////////////////////////////////////////////////////////////////////
     d3.csv('life-expectancy.csv').then( data => {
         function initializeData(data) {
-            const compYear = '1981'
+            const compYear = '1961'
 
             const nested = d3.nest()
                 .key(d => d.country)
@@ -130,7 +247,7 @@
             for(const country of Array.from(nested)) {
 
                 const obj = {
-                        baseline: +Array.from(data.filter(d => d.country == country.key)).filter(d => d.year == '1981')[0]['life-expectancy'],
+                        baseline: +Array.from(data.filter(d => d.country == country.key)).filter(d => d.year == '1961')[0]['life-expectancy'],
                         years: []
                     }
                 
@@ -175,6 +292,7 @@
             originalData: data,
             transformedData: initializeData(data)
         });
+
     });
 </script>
 </html>
