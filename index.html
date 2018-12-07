@@ -116,8 +116,6 @@
                 }
             }
 
-            console.log(this.transformedData);
-
             return this.transformedData;
         }
 
@@ -240,6 +238,20 @@
 
             this.refLine
                 .attr('transform', `translate(${this.xScale(h)}, ${this.padding.top})`)
+
+            const baselineYear = this.data.filter(d => d.year == Math.round(h));
+
+            for(const country of this.transformedData) {
+                let baselineCountry = baselineYear.filter(d => d.country === country.key);
+                console.log(d3.extent(country.values, d => d.diff));
+                for(const value of country.values) {
+                    value.diff = value.le - baselineCountry[0].le;
+                }
+            }
+
+            this.lineEnter
+                .merge(this.line.data(this.transformedData))
+                    .attr('d', d => this.lineGenerator(d.values));
 
         }  
 
