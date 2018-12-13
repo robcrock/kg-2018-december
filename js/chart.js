@@ -62,7 +62,7 @@ class LineChart {
   createScales() {
     this.xScale = d3.scaleLinear()
       .domain(d3.extent(this.data, d => +d.year))
-      .range([this.padding.left, this.width - this.padding.right]);
+      .range([this.padding.left, this.chartWidth]);
 
     this.yScale = d3.scaleLinear()
       .domain([-50, 50])
@@ -102,22 +102,23 @@ class LineChart {
   }
 
   createSlider() {
-    
+    const sHeight = 100;
+    const sMargin = { top: 0, right: 0, bottom: 0, left: 0 };
+    const sPadding = { top: 0, right: 0, bottom: 0, left: 0 };
+
     const startDate = 1961;
     ////////// slider //////////
     const svgSlider = d3.select(".slider")
         .append("svg")
-        .attr("width", this.width + this.margin.left + this.margin.right)
-        .attr("height", this.height);
+        .attr("width", this.width)
+        .attr("height", sHeight);
         
-    this.x = d3.scaleLinear()
-        .domain([this.xScale.domain()[0], this.xScale.domain()[1]])
-        .range([0, this.width])
+    this.x = this.xScale
         .clamp(true);
 
     const slider = svgSlider.append("g")
         .attr("class", "slider")
-        .attr("transform", "translate(" + this.margin.left + "," + this.height / 2 + ")");
+        .attr("transform", `translate( ${this.margin.left}, ${sHeight / 2})`);
 
     slider.append("line")
         .attr("class", "track")
@@ -132,15 +133,7 @@ class LineChart {
             .on("start drag", () =>  { this.update(this.x.invert(d3.event.x)) }));
     slider.insert("g", ".track-overlay")
         .attr("class", "ticks")
-        .attr("transform", "translate(0," + 18 + ")")
-    .selectAll("text")
-        .data(this.x.ticks(10))
-        .enter()
-        .append("text")
-        .attr("x", this.x)
-        .attr("y", 10)
-        .attr("text-anchor", "middle")
-        .text(function(d) { return d; });
+        .attr("transform", `translate(0,18)`)
 
     this.handle = slider.insert("circle", ".track-overlay")
         .attr("class", "handle")
