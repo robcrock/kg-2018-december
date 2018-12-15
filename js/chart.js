@@ -3,7 +3,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 class Chart {
   constructor(opts) {
-    console.log(opts);
     this.element = opts.element;
     this.width = opts.width;
     this.height = opts.height;
@@ -11,9 +10,21 @@ class Chart {
     this.padding = opts.padding;
     this.data = opts.data;
 
+    this.cleanData(this.data);
     this.marginConvention();
     this.scales();
     this.axes();
+  }
+  cleanData(data) {
+    this.cleanData = data.map(d => {
+      return {
+        country: d.country,
+        year: +d.year,
+        le: +d['life-expectancy']
+      };
+    })
+
+    return this.cleanData;
   }
   marginConvention() {
     console.log(this.margin);
@@ -77,8 +88,10 @@ class Slider extends Chart{
   }
 
   createSlider() {
+    // Ensure that the handle doesn't slide off the track
     this.xScale.clamp(true);
 
+    // All our elements will hang off this slider
     const slider = this.plot.append("g")
         .attr("transform", `translate( ${this.margin.left}, ${this.chartHeight * .8})`);
 
@@ -123,32 +136,31 @@ class LineChart extends Chart{
       data: opts.data
     })
 
-    this.transformData(this.data);
+    this.transformData(this.cleanData);
     this.gridlines();
     this.createLine();
     this.floatingAxis();
   }
   transformData(data) {
-    const firstYear = d3.min(data, d => d.year);
-    const baselineYear = data.filter(d => d.year === firstYear);
-
-    for (const row of data) {
-      row.year = +row.year;
-      row.le = +row['life-expectancy'];
-      delete row['life-expectancy'];
-    }
+    const baselineYear = data.filter(d => d.year === this.startingPosition);
 
     this.transformedData = d3.nest()
       .key(d => d.country)
       .entries(data);
 
+    // console.log("Trans data ", this.transformedData)
+
     for (const country of this.transformedData) {
       const baselineCountry = baselineYear.filter(d => d.country === country.key);
+      // console.log('bl country ', baselineCountry)
       for (const value of country.values) {
+        // console.log('val ', value)
+        // debugger;
         value.diff = value.le - baselineCountry[0].le;
       }
     }
 
+    // console.log('Trans d ',this.transformedData);
     return this.transformedData;
   }
   gridlines() {
@@ -253,7 +265,7 @@ d3.csv('/data/life-expectancy.csv').then((data) => {
     lineChart.yRefLine
       .attr('transform', `translate(${this.xScale(h)}, 0)`);
 
-    const baselineYear = lineChart.data.filter(d => d.year === Math.round(h));
+    const baselineYear = lineChart.cleanData.filter(d => d.year === Math.round(h));
 
     for (const country of lineChart.transformedData) {
       const baselineCountry = baselineYear.filter(d => d.country === country.key);
