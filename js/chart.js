@@ -1,5 +1,124 @@
 ////////////////////////////////////////////////////////////////////////////////
-/////////////////////////// CREATE A LINE CHART CLASS //////////////////////////
+// CREATE A DASHBOARD CLASS
+////////////////////////////////////////////////////////////////////////////////
+class Dashboard {
+  constructor(opts) {
+    this.element = opts.element;
+    this.width = opts.width;
+    this.height = opts.height;
+    this.titleText = opts.titleText;
+    this.charts = opts.charts;
+    this.footer = opts.footer;
+
+    this.addTitle(this.titleText);
+    this.addCharts(this.charts);
+    this.addFooter(this.footer);
+  }
+
+  addTitle(titleText) {
+    const titleElement = document.createElement('header');
+    this.element.appendChild(titleElement);
+    titleElement.textContent = titleText;
+  }
+
+  addCharts(charts) {
+    charts.forEach( chart => {
+      const chartElement = document.createElement('div');
+      this.element.appendChild(chartElement);
+      chartElement.classList.add(chart);
+    })
+  }
+
+  addFooter(footerObj) {
+    const footerElement = document.createElement('footer');
+    this.element.appendChild(footerElement);
+    footerElement.innerHTML = `<a href=${footerObj.link}>${footerObj.text}</a>`;
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// CREATE A SLIDER CLASS
+////////////////////////////////////////////////////////////////////////////////
+class Slider {
+  constructor(opts) {
+    this.element = opts.element;
+    this.width = opts.width;
+    this.height = opts.height;
+    this.margin = opts.margin;
+    this.padding = opts.padding;
+    this.data = opts.data;
+
+    this.setupChartArea();
+    this.createScales();
+    this.createSlider();
+  }
+
+  setupChartArea() {
+    // Create additional setup variables we'll need locally based on the options above
+    this.plotWidth = this.width - (this.margin.left + this.margin.right);
+    this.plotHeight = this.height - (this.margin.top + this.margin.bottom);
+    this.chartWidth = this.plotWidth - (this.padding.right + this.padding.left);
+    this.chartHeight = this.plotHeight - (this.padding.top + this.padding.bottom);
+
+    // This SVG is the full size of the container. All charts will fit inside this space
+    const svg = d3.select(this.element).append('svg')
+      .attr('width', this.width)
+      .attr('height', this.height);
+
+    this.plot = svg.append('g')
+      .classed('plot', true)
+      .attr('transform', `translate(${this.margin.left}, ${this.margin.top})`)
+      .attr('width', this.plotWidth)
+      .attr('height', this.plotHeight);
+  }
+
+  createScales() {
+    this.xScale = d3.scaleLinear()
+      .domain(d3.extent(this.data, d => +d.year))
+      .range([
+        this.margin.left + this.padding.left,
+        this.chartWidth - (this.margin.right + this.padding.right)
+      ])
+      .clamp(true);
+  }
+
+  createSlider() {
+    this.startingPosition = this.xScale.domain()[0];
+
+    const slider = this.plot.append("g")
+        .attr("transform", `translate( ${this.margin.left}, ${this.height * .8})`);
+
+    slider.append("line")
+        .attr("class", "track")
+        .attr("x1", this.xScale.range()[0])
+        .attr("x2", this.xScale.range()[1])
+      .select(function() { return this.parentNode.appendChild(this.cloneNode(true)); })
+        .attr("class", "track-inset")
+      .select(function() { return this.parentNode.appendChild(this.cloneNode(true)); })
+        .attr("class", "track-overlay")
+      .call(d3.drag()
+        // .on("start.interrupt", function() { slider.interrupt(); })
+        .on("start", () => this.dragStart(this.xScale.invert(d3.event.x)))
+        .on("drag", () => this.dragging(this.xScale.invert(d3.event.x))));
+
+    this.handle = slider.insert("circle", ".track-overlay")
+      .attr("class", "handle")
+      .attr('cx', this.xScale(this.startingPosition))
+      .attr("r", 9);
+
+    this.label = slider.append("text")  
+      .attr("class", "label")
+      .attr("text-anchor", "middle")
+      .text(this.startingPosition)
+      .attr("transform", `translate(${this.xScale(this.startingPosition)}, -25)`)
+      .attr('font-family', 'PT Mono')
+
+
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// CREATE A LINE CHART CLASS
 ////////////////////////////////////////////////////////////////////////////////
 class LineChart {
   constructor(opts) {
@@ -10,22 +129,18 @@ class LineChart {
     this.padding = opts.padding;
     this.data = opts.data;
 
-    // Create additional setup variables we'll need locally based on the options above
-    this.plotWidth = this.width - (this.margin.left + this.margin.right);
-    this.plotHeight = this.height - (this.margin.top + this.margin.bottom);
-    this.chartWidth = this.plotWidth - (this.padding.right + this.padding.left);
-    this.chartHeight = this.plotHeight - (this.padding.top + this.padding.bottom);
-
     this.updateData(this.data);
     this.setupChartArea();
     this.createScales();
-    this.createSlider();
-    this.createLine();
     this.createAxes();
+    this.addDecorations();
+    this.createLine();
+    this.addRefLines();
   }
 
   updateData(data) {
-    const baselineYear = data.filter(d => d.year === '1981');
+    const firstYear = d3.min(data, d => d.year);
+    const baselineYear = data.filter(d => d.year === firstYear);
 
     for (const row of data) {
       row.year = +row.year;
@@ -48,6 +163,13 @@ class LineChart {
   }
 
   setupChartArea() {
+    // Create additional setup variables we'll need locally based on the options above
+    this.plotWidth = this.width - (this.margin.left + this.margin.right);
+    this.plotHeight = this.height - (this.margin.top + this.margin.bottom);
+    this.chartWidth = this.plotWidth - (this.padding.right + this.padding.left);
+    this.chartHeight = this.plotHeight - (this.padding.top + this.padding.bottom);
+
+    // // This SVG is the full size of the container. All charts will fit inside this space
     const svg = d3.select(this.element).append('svg')
       .attr('width', this.width)
       .attr('height', this.height);
@@ -55,26 +177,24 @@ class LineChart {
     this.plot = svg.append('g')
       .classed('plot', true)
       .attr('transform', `translate(${this.margin.left}, ${this.margin.top})`)
-      .attr('width', this.width - (this.margin.left + this.margin.right))
-      .attr('height', this.height - (this.margin.top + this.margin.bottom));
+      .attr('width', this.plotWidth)
+      .attr('height', this.plotHeight);
   }
 
   createScales() {
     this.xScale = d3.scaleLinear()
       .domain(d3.extent(this.data, d => +d.year))
-      .range([this.padding.left, this.chartWidth]);
+      .range([
+        this.margin.left + this.padding.left,
+        this.chartWidth - (this.margin.right + this.padding.right)
+      ]);
 
     this.yScale = d3.scaleLinear()
       .domain([-50, 50])
-      .range([this.height - this.padding.bottom, this.padding.top]);
-
-    ////////////////////////////////////////////////////////////////////////////////
-    ///////////////////////////// CREATE LINE GENERATOR ////////////////////////////
-    ////////////////////////////////////////////////////////////////////////////////
-    this.lineGenerator = d3.line()
-      .x(d => this.xScale(d.year))
-      .y(d => this.yScale(d.diff))
-      .curve(d3.curveCardinal);
+      .range([
+        this.height - this.padding.bottom,
+        this.padding.top
+      ]);
   }
 
   createAxes() {
@@ -83,136 +203,159 @@ class LineChart {
 
     this.yAxis = d3.axisRight()
       .scale(this.yScale);
-
-    this.yRefLine = this.plot.append('g')
-      .classed('y-axis', true)
-      .attr('transform', `translate(${this.xScale(1981)}, ${this.padding.top})`)
-      .call(this.yAxis);
-
-    this.yRefLine.selectAll('text')
-      .attr('text-anchor', 'middle')
-      .attr('x', 0);
-
-    this.xRefLine = this.plot.append('g')
-      .classed('x-axis', true)
-      .call(this.xAxis
-        .tickFormat(d3.format('0')))
-      .attr('font-size', 12)
-      .attr('transform', `translate(0, ${this.yScale(0)})`);
   }
+  
+  addDecorations() {
+    const gridArray = [
+      {value: 50},
+      {value: 40},
+      {value: 30},
+      {value: 20},
+      {value: 10},
+      {value: 0},
+      {value: -10},
+      {value: -20},
+      {value: -30},
+      {value: -40},
+      {value: -50}
+    ];
 
-  createSlider() {
-    const sHeight = 100;
-    const sMargin = { top: 0, right: 0, bottom: 0, left: 0 };
-    const sPadding = { top: 0, right: 0, bottom: 0, left: 0 };
+    this.plot.selectAll('.grid-line').data(gridArray).enter().append('line')
+        .attr('x1', this.margin.left + this.padding.left)
+        .attr('x2', this.chartWidth - (this.margin.right + this.padding.right))
+        .attr('y1', d => this.yScale(d.value))
+        .attr('y2', d => this.yScale(d.value))
+        .attr('stroke', d => d.value === 0 ? '#BABABA' : '#EDEDED')
+        .attr('stroke-width', d => d.value === 0 ? 2 : 1);
 
-    const startDate = 1961;
-    ////////// slider //////////
-    const svgSlider = d3.select(".slider")
-        .append("svg")
-        .attr("width", this.width)
-        .attr("height", sHeight);
-        
-    this.x = this.xScale
-        .clamp(true);
-
-    const slider = svgSlider.append("g")
-        .attr("class", "slider")
-        .attr("transform", `translate( ${this.margin.left}, ${sHeight / 2})`);
-
-    slider.append("line")
-        .attr("class", "track")
-        .attr("x1", this.x.range()[0])
-        .attr("x2", this.x.range()[1])
-    .select(function() { return this.parentNode.appendChild(this.cloneNode(true)); })
-        .attr("class", "track-inset")
-    .select(function() { return this.parentNode.appendChild(this.cloneNode(true)); })
-        .attr("class", "track-overlay")
-        .call(d3.drag()
-            .on("start.interrupt", function() { slider.interrupt(); })
-            .on("start drag", () =>  { this.update(this.x.invert(d3.event.x)) }));
-    slider.insert("g", ".track-overlay")
-        .attr("class", "ticks")
-        .attr("transform", `translate(0,18)`)
-
-    this.handle = slider.insert("circle", ".track-overlay")
-        .attr("class", "handle")
-        .attr('cx', this.x(1981))
-        .attr("r", 9);
-
-    this.label = slider.append("text")  
-        .attr("class", "label")
-        .attr("text-anchor", "middle")
-        .text(startDate)
-        .attr("transform", `translate(${this.x(1981)}, -25)`)
-
-  }
-
-  update(h) {
-    // update position and text of label according to slider scale
-    this.handle
-      .attr('cx', this.x(h));
-
-    this.label
-      .attr('transform', `translate(${this.x(h)}, -25)`)
-      .text(Math.round(h));
-
-    this.yRefLine
-      .attr('transform', `translate(${this.xScale(h)}, ${this.padding.top})`);
-
-    const baselineYear = this.data.filter(d => d.year === Math.round(h));
-
-    for (const country of this.transformedData) {
-      const baselineCountry = baselineYear.filter(d => d.country === country.key);
-      for (const value of country.values) {
-        value.diff = value.le - baselineCountry[0].le;
-      }
-    }
-
-    this.lineEnter
-      .merge(this.line.data(this.transformedData, d => d.key))
-      .attr('d', d => this.lineGenerator(d.values));
   }
 
   createLine() {
-    this.line = d3.select('.plot')
-      .selectAll('path').data(this.transformedData, d => d.key);
+    this.lineGenerator = d3.line()
+      .x(d => this.xScale(d.year))
+      .y(d => this.yScale(d.diff))
+      .curve(d3.curveCardinal);
 
-    this.lineEnter = this.line.enter()
-      .append('path')
+    this.line = this.plot.selectAll('path').data(this.transformedData, d => d.key);
+
+    this.lineEnter = this.line.enter().append('path')
       .attr('fill', 'none')
       .attr('stroke', 'steelblue')
       .attr('stroke-width', 1.5)
       .attr('opacity', 0.2)
       .attr('d', d => this.lineGenerator(d.values));
   }
+
+  addRefLines() {
+    const startingPosition = this.xScale.domain()[0];
+    
+    this.yRefLine = this.plot.append('g')
+      .classed('y-axis', true)
+      .attr('transform', `translate(${this.xScale(startingPosition)}, 0)`)
+        .call(this.yAxis)
+          .attr('font-family', 'PT Mono')
+          .attr('font-size', 14);
+
+    d3.select('.y-axis').selectAll('g').nodes()[5].remove();
+
+    this.yRefLine.selectAll('line').remove();
+
+    this.yRefLine.select('path')
+      .attr('stroke', '#BABABA')
+
+    this.yRefLine.selectAll('text')
+      .attr('text-anchor', 'middle')
+      .attr('x', 0);
+  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-////////////////////////// LOAD DATA FOR THE 1ST TIME //////////////////////////
+// LOAD DATA FOR THE 1ST TIME
 ////////////////////////////////////////////////////////////////////////////////
 d3.csv('/data/life-expectancy.csv').then((data) => {
-  ////////////////////////////////////////////////////////////////////////////////
-  ////////////////////////////// SET THE CHART SIZE //////////////////////////////
-  ////////////////////////////////////////////////////////////////////////////////
+  // Dashboard variables
   const width = 960;
   const height = 500;
+  const titleText = 'How has life expectancy changed?'
+  const charts = ['slider', 'lineChart'];
+  const footer = {
+    text: 'Life Expectancy at Birth',
+    link: 'https://data.world/makeovermonday/life-expectancy-at-birth-by-country'
+  }
   const margin = {
-    top: 10, right: 10, bottom: 10, left: 10,
+    top: 0, right: 0, bottom: 0, left: 0,
   };
   const padding = {
-    top: 0, right: 40, bottom: 30, left: 30,
+    top: 0, right: 40, bottom: 30, left: 40,
   };
 
-  ////////////////////////////////////////////////////////////////////////////////
-  /////////////////////////////// CREATE NEW CHART ///////////////////////////////
-  ////////////////////////////////////////////////////////////////////////////////
-  const chart = new LineChart({
-    element: document.querySelector('.chart'),
+  const lifeExpectancy = new Dashboard ({
+    element: document.querySelector('.container'),
     width,
     height,
-    margin,
-    padding,
+    titleText,
+    charts,
+    footer
+  })
+
+  ////////////////////////////////////////////////////////////////////////////////
+  // CREATE NEW CHARTS
+  ////////////////////////////////////////////////////////////////////////////////
+  const slider = new Slider ({
+    element: document.querySelector('.slider'),
+    width,
+    height: 50,
+    margin: { top: 0, right: 0, bottom: 0, left: 0 },
+    padding: { top: 0, right: 30, bottom: 0, left: 30 },
     data,
   });
+
+  const lineChart = new LineChart({
+    element: document.querySelector('.lineChart'),
+    width,
+    height,
+    margin: { top: 0, right: 0, bottom: 0, left: 0 },
+    padding: { top: 10, right: 30, bottom: 10, left: 30 },
+    data,
+  });
+
+  ////////////////////////////////////////////////////////////////////////////////
+  // CREATE CONTROLERS
+  ////////////////////////////////////////////////////////////////////////////////
+  slider.dragStart = function(h) {
+    console.log(h);
+    // update position and text of label according to slider scale
+    this.handle
+      .attr('cx', this.xScale(h));
+
+    this.label
+      .attr('transform', `translate(${this.xScale(h)}, -25)`)
+      .text(Math.round(h));
+  }
+
+  slider.dragging = function(h) {
+
+    this.handle
+      .attr('cx', this.xScale(h));
+
+    this.label
+      .attr('transform', `translate(${this.xScale(h)}, -25)`)
+      .text(Math.round(h));
+
+    lineChart.yRefLine
+      .attr('transform', `translate(${this.xScale(h)}, 0)`);
+
+    const baselineYear = lineChart.data.filter(d => d.year === Math.round(h));
+
+    for (const country of lineChart.transformedData) {
+      const baselineCountry = baselineYear.filter(d => d.country === country.key);
+      for (const value of country.values) {
+        value.diff = value.le - baselineCountry[0].le;
+      }
+    }
+  
+    lineChart.lineEnter
+      .merge(lineChart.line.data(lineChart.transformedData, d => d.key))
+      .attr('d', d => lineChart.lineGenerator(d.values));
+  }
 });
