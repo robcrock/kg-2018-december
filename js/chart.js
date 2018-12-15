@@ -1,8 +1,9 @@
 ////////////////////////////////////////////////////////////////////////////////
-// CREATE A SLIDER CLASS
+// CREATE A CHART CLASS
 ////////////////////////////////////////////////////////////////////////////////
-class Slider {
+class Chart {
   constructor(opts) {
+    console.log(opts);
     this.element = opts.element;
     this.width = opts.width;
     this.height = opts.height;
@@ -10,13 +11,12 @@ class Slider {
     this.padding = opts.padding;
     this.data = opts.data;
 
-    this.setupChartArea();
-    this.createScales();
-    this.createSlider();
+    this.marginConvention();
+    this.scales();
+    this.axes();
   }
-
-  setupChartArea() {
-    // Create additional setup variables we'll need locally based on the options above
+  marginConvention() {
+    console.log(this.margin);
     this.plotWidth = this.width - this.margin.right;
     this.plotHeight = this.height - this.margin.bottom;
     this.chartWidth = this.plotWidth - this.padding.right;
@@ -33,19 +33,51 @@ class Slider {
       .attr('width', this.plotWidth)
       .attr('height', this.plotHeight);
   }
-
-  createScales() {
+  scales() {
     this.xScale = d3.scaleLinear()
       .domain(d3.extent(this.data, d => +d.year))
       .range([
         this.margin.left + this.padding.left,
         this.plotWidth - (this.margin.right + this.padding.right)
-      ])
-      .clamp(true);
+      ]);
+
+    this.yScale = d3.scaleLinear()
+      .domain([-50, 50])
+      .range([
+        this.chartHeight,
+        this.margin.top + this.padding.top
+      ]);
+
+    this.startingPosition = this.xScale.domain()[0];
+  }
+  axes() {
+    this.xAxis = d3.axisBottom()
+      .scale(this.xScale);
+
+    this.yAxis = d3.axisRight()
+      .scale(this.yScale);
+  }
+}
+////////////////////////////////////////////////////////////////////////////////
+// EXTEND CHART CLASS TO CREATE A SLIDER CLASS
+////////////////////////////////////////////////////////////////////////////////
+class Slider extends Chart{
+  constructor(opts) {
+    super({
+      element: opts.element,
+      width: opts.width,
+      height: opts.height,
+      margin: opts.margin,
+      padding: opts.padding,
+      data: opts.data
+    })
+
+    // this.createScales();
+    this.createSlider();
   }
 
   createSlider() {
-    this.startingPosition = this.xScale.domain()[0];
+    this.xScale.clamp(true);
 
     const slider = this.plot.append("g")
         .attr("transform", `translate( ${this.margin.left}, ${this.chartHeight * .8})`);
@@ -74,33 +106,29 @@ class Slider {
       .attr('font-weight', 400)
       .attr("transform", `translate(${this.xScale(this.startingPosition)}, -20)`)
       .attr('font-family', 'PT Mono')
-
-
   }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// CREATE A LINE CHART CLASS
+// EXTEND CHART CLASS TO CREATE CREATE A LINE CHART CLASS
 ////////////////////////////////////////////////////////////////////////////////
-class LineChart {
+class LineChart extends Chart{
   constructor(opts) {
-    this.element = opts.element;
-    this.width = opts.width;
-    this.height = opts.height;
-    this.margin = opts.margin;
-    this.padding = opts.padding;
-    this.data = opts.data;
+    super({
+      element: opts.element,
+      width: opts.width,
+      height: opts.height,
+      margin: opts.margin,
+      padding: opts.padding,
+      data: opts.data
+    })
 
-    this.updateData(this.data);
-    this.setupChartArea();
-    this.createScales();
-    this.createAxes();
-    this.addDecorations();
+    this.transformData(this.data);
+    this.gridlines();
     this.createLine();
-    this.addRefLines();
+    this.floatingAxis();
   }
-
-  updateData(data) {
+  transformData(data) {
     const firstYear = d3.min(data, d => d.year);
     const baselineYear = data.filter(d => d.year === firstYear);
 
@@ -123,51 +151,7 @@ class LineChart {
 
     return this.transformedData;
   }
-
-  setupChartArea() {
-    // Create additional setup variables we'll need locally based on the options above
-    this.plotWidth = this.width - this.margin.right;
-    this.plotHeight = this.height - this.margin.bottom;
-    this.chartWidth = this.plotWidth - this.padding.right;
-    this.chartHeight = this.plotHeight - this.padding.bottom;
-
-    // // This SVG is the full size of the container. All charts will fit inside this space
-    const svg = d3.select(this.element).append('svg')
-      .attr('width', this.width)
-      .attr('height', this.height);
-
-    this.plot = svg.append('g')
-      .classed('plot', true)
-      .attr('transform', `translate(${this.margin.left}, ${this.margin.top})`)
-      .attr('width', this.plotWidth)
-      .attr('height', this.plotHeight);
-  }
-
-  createScales() {
-    this.xScale = d3.scaleLinear()
-      .domain(d3.extent(this.data, d => +d.year))
-      .range([
-        this.margin.left + this.padding.left,
-        this.plotWidth - (this.margin.right + this.padding.right)
-      ]);
-
-    this.yScale = d3.scaleLinear()
-      .domain([-50, 50])
-      .range([
-        this.chartHeight,
-        this.margin.top + this.padding.top
-      ]);
-  }
-
-  createAxes() {
-    this.xAxis = d3.axisBottom()
-      .scale(this.xScale);
-
-    this.yAxis = d3.axisRight()
-      .scale(this.yScale);
-  }
-  
-  addDecorations() {
+  gridlines() {
     const gridArray = [
       {value: 50},
       {value: 40},
@@ -191,7 +175,6 @@ class LineChart {
         .attr('stroke-width', d => d.value === 0 ? 2 : 1);
 
   }
-
   createLine() {
     this.lineGenerator = d3.line()
       .x(d => this.xScale(d.year))
@@ -207,13 +190,10 @@ class LineChart {
       .attr('opacity', 0.2)
       .attr('d', d => this.lineGenerator(d.values));
   }
-
-  addRefLines() {
-    const startingPosition = this.xScale.domain()[0];
-    
+  floatingAxis() {
     this.yRefLine = this.plot.append('g')
       .classed('y-axis', true)
-      .attr('transform', `translate(${this.xScale(startingPosition)}, 0)`)
+      .attr('transform', `translate(${this.xScale(this.startingPosition)}, 0)`)
         .call(this.yAxis)
           .attr('font-family', 'PT Mono')
           .attr('font-size', 14);
