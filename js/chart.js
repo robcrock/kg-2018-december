@@ -1,42 +1,4 @@
 ////////////////////////////////////////////////////////////////////////////////
-// CREATE A DASHBOARD CLASS
-////////////////////////////////////////////////////////////////////////////////
-class Dashboard {
-  constructor(opts) {
-    this.element = opts.element;
-    this.width = opts.width;
-    this.height = opts.height;
-    this.titleText = opts.titleText;
-    this.charts = opts.charts;
-    this.footer = opts.footer;
-
-    this.addTitle(this.titleText);
-    this.addCharts(this.charts);
-    this.addFooter(this.footer);
-  }
-
-  addTitle(titleText) {
-    const titleElement = document.createElement('header');
-    this.element.appendChild(titleElement);
-    titleElement.textContent = titleText;
-  }
-
-  addCharts(charts) {
-    charts.forEach( chart => {
-      const chartElement = document.createElement('div');
-      this.element.appendChild(chartElement);
-      chartElement.classList.add(chart);
-    })
-  }
-
-  addFooter(footerObj) {
-    const footerElement = document.createElement('footer');
-    this.element.appendChild(footerElement);
-    footerElement.innerHTML = `<a href=${footerObj.link}>${footerObj.text}</a>`;
-  }
-}
-
-////////////////////////////////////////////////////////////////////////////////
 // CREATE A SLIDER CLASS
 ////////////////////////////////////////////////////////////////////////////////
 class Slider {
@@ -55,10 +17,10 @@ class Slider {
 
   setupChartArea() {
     // Create additional setup variables we'll need locally based on the options above
-    this.plotWidth = this.width - (this.margin.left + this.margin.right);
-    this.plotHeight = this.height - (this.margin.top + this.margin.bottom);
-    this.chartWidth = this.plotWidth - (this.padding.right + this.padding.left);
-    this.chartHeight = this.plotHeight - (this.padding.top + this.padding.bottom);
+    this.plotWidth = this.width - this.margin.right;
+    this.plotHeight = this.height - this.margin.bottom;
+    this.chartWidth = this.plotWidth - this.padding.right;
+    this.chartHeight = this.plotHeight - this.padding.bottom;
 
     // This SVG is the full size of the container. All charts will fit inside this space
     const svg = d3.select(this.element).append('svg')
@@ -77,7 +39,7 @@ class Slider {
       .domain(d3.extent(this.data, d => +d.year))
       .range([
         this.margin.left + this.padding.left,
-        this.chartWidth - (this.margin.right + this.padding.right)
+        this.plotWidth - (this.margin.right + this.padding.right)
       ])
       .clamp(true);
   }
@@ -86,7 +48,7 @@ class Slider {
     this.startingPosition = this.xScale.domain()[0];
 
     const slider = this.plot.append("g")
-        .attr("transform", `translate( ${this.margin.left}, ${this.height * .8})`);
+        .attr("transform", `translate( ${this.margin.left}, ${this.chartHeight * .8})`);
 
     slider.append("line")
         .attr("class", "track")
@@ -97,8 +59,6 @@ class Slider {
       .select(function() { return this.parentNode.appendChild(this.cloneNode(true)); })
         .attr("class", "track-overlay")
       .call(d3.drag()
-        // .on("start.interrupt", function() { slider.interrupt(); })
-        .on("start", () => this.dragStart(this.xScale.invert(d3.event.x)))
         .on("drag", () => this.dragging(this.xScale.invert(d3.event.x))));
 
     this.handle = slider.insert("circle", ".track-overlay")
@@ -110,7 +70,9 @@ class Slider {
       .attr("class", "label")
       .attr("text-anchor", "middle")
       .text(this.startingPosition)
-      .attr("transform", `translate(${this.xScale(this.startingPosition)}, -25)`)
+      .attr('font-size', 16)
+      .attr('font-weight', 400)
+      .attr("transform", `translate(${this.xScale(this.startingPosition)}, -20)`)
       .attr('font-family', 'PT Mono')
 
 
@@ -164,10 +126,10 @@ class LineChart {
 
   setupChartArea() {
     // Create additional setup variables we'll need locally based on the options above
-    this.plotWidth = this.width - (this.margin.left + this.margin.right);
-    this.plotHeight = this.height - (this.margin.top + this.margin.bottom);
-    this.chartWidth = this.plotWidth - (this.padding.right + this.padding.left);
-    this.chartHeight = this.plotHeight - (this.padding.top + this.padding.bottom);
+    this.plotWidth = this.width - this.margin.right;
+    this.plotHeight = this.height - this.margin.bottom;
+    this.chartWidth = this.plotWidth - this.padding.right;
+    this.chartHeight = this.plotHeight - this.padding.bottom;
 
     // // This SVG is the full size of the container. All charts will fit inside this space
     const svg = d3.select(this.element).append('svg')
@@ -186,14 +148,14 @@ class LineChart {
       .domain(d3.extent(this.data, d => +d.year))
       .range([
         this.margin.left + this.padding.left,
-        this.chartWidth - (this.margin.right + this.padding.right)
+        this.plotWidth - (this.margin.right + this.padding.right)
       ]);
 
     this.yScale = d3.scaleLinear()
       .domain([-50, 50])
       .range([
-        this.height - this.padding.bottom,
-        this.padding.top
+        this.chartHeight,
+        this.margin.top + this.padding.top
       ]);
   }
 
@@ -222,7 +184,7 @@ class LineChart {
 
     this.plot.selectAll('.grid-line').data(gridArray).enter().append('line')
         .attr('x1', this.margin.left + this.padding.left)
-        .attr('x2', this.chartWidth - (this.margin.right + this.padding.right))
+        .attr('x2', this.chartWidth)
         .attr('y1', d => this.yScale(d.value))
         .attr('y2', d => this.yScale(d.value))
         .attr('stroke', d => d.value === 0 ? '#BABABA' : '#EDEDED')
@@ -262,8 +224,10 @@ class LineChart {
 
     this.yRefLine.select('path')
       .attr('stroke', '#BABABA')
+      .attr('opacity', 0.5);
 
     this.yRefLine.selectAll('text')
+      .attr('font-weight', 200)
       .attr('text-anchor', 'middle')
       .attr('x', 0);
   }
@@ -273,40 +237,15 @@ class LineChart {
 // LOAD DATA FOR THE 1ST TIME
 ////////////////////////////////////////////////////////////////////////////////
 d3.csv('/data/life-expectancy.csv').then((data) => {
-  // Dashboard variables
   const width = 960;
   const height = 500;
-  const titleText = 'How has life expectancy changed?'
-  const charts = ['slider', 'lineChart'];
-  const footer = {
-    text: 'Life Expectancy at Birth',
-    link: 'https://data.world/makeovermonday/life-expectancy-at-birth-by-country'
-  }
-  const margin = {
-    top: 0, right: 0, bottom: 0, left: 0,
-  };
-  const padding = {
-    top: 0, right: 40, bottom: 30, left: 40,
-  };
 
-  const lifeExpectancy = new Dashboard ({
-    element: document.querySelector('.container'),
-    width,
-    height,
-    titleText,
-    charts,
-    footer
-  })
-
-  ////////////////////////////////////////////////////////////////////////////////
-  // CREATE NEW CHARTS
-  ////////////////////////////////////////////////////////////////////////////////
   const slider = new Slider ({
     element: document.querySelector('.slider'),
     width,
     height: 50,
     margin: { top: 0, right: 0, bottom: 0, left: 0 },
-    padding: { top: 0, right: 30, bottom: 0, left: 30 },
+    padding: { top: 0, right: 30, bottom: 5, left: 30 },
     data,
   });
 
@@ -315,31 +254,20 @@ d3.csv('/data/life-expectancy.csv').then((data) => {
     width,
     height,
     margin: { top: 0, right: 0, bottom: 0, left: 0 },
-    padding: { top: 10, right: 30, bottom: 10, left: 30 },
+    padding: { top: 10, right: 30, bottom: 30, left: 30 },
     data,
   });
 
   ////////////////////////////////////////////////////////////////////////////////
   // CREATE CONTROLERS
   ////////////////////////////////////////////////////////////////////////////////
-  slider.dragStart = function(h) {
-    console.log(h);
-    // update position and text of label according to slider scale
-    this.handle
-      .attr('cx', this.xScale(h));
-
-    this.label
-      .attr('transform', `translate(${this.xScale(h)}, -25)`)
-      .text(Math.round(h));
-  }
-
   slider.dragging = function(h) {
 
     this.handle
       .attr('cx', this.xScale(h));
 
     this.label
-      .attr('transform', `translate(${this.xScale(h)}, -25)`)
+      .attr('transform', `translate(${this.xScale(h)}, -20)`)
       .text(Math.round(h));
 
     lineChart.yRefLine
