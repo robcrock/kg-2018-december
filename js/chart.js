@@ -59,7 +59,7 @@ class Chart {
         this.margin.top + this.padding.top
       ]);
 
-    this.startingPosition[0] = this.xScale.domain();
+    this.startingPosition = this.xScale.domain()[0];
   }
 
   axes() {
